@@ -239,7 +239,7 @@ x86_64-iphonesimulator/
         mdoc_zk.h
 ```
 
-### Script
+### Script `create_xcframework.sh`
 
 ```bash
 #!/bin/bash
