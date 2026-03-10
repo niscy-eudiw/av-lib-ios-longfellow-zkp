@@ -177,11 +177,13 @@ try zkSystem.verifyProof(
 Once configured, Eudi [WalletKit](https://github.com/eu-digital-identity-wallet/eudi-lib-ios-wallet-kit) will automatically generate zero-knowledge proofs for ZK-enabled requests in both proximity (ISO 18013-5) and OpenID4VP use cases. You only need the following source code to generate proofs, provided that you include the required circuits in the app bundle. 
 
 ```swift
-let circuits = LongfellowZkSystem.enumerateLongfellowCircuits()
+let circuits = LongfellowZkSystem.enumerateLongfellowCircuits(bundle: Bundle.main)
 if !circuits.isEmpty {
     wallet.zkSystemRepository = ZkSystemRepository(systems: [LongfellowZkSystem(circuits: circuits)])
 }
 ```
+
+You need also to include the circuits in your bundle. You can find them in the [multipaz repository](https://github.com/openwallet-foundation/multipaz) in the folder `samples/testapp/src/commonMain/composeResources/files/longfellow-libzk-v1`
 
 ### 5. Extracting Issuer Public Key
 
