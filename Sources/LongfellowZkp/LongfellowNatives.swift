@@ -328,7 +328,7 @@ extension Data {
 
 extension Array where Element == UInt8 {
 public func toHexString() -> String {
-    var res = `lazy`.reduce(into: "") {
+    let res = `lazy`.reduce(into: "") {
       var s = String($1, radix: 16)
       if s.count == 1 {
         s = "0" + s
