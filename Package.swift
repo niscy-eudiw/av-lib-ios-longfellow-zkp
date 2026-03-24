@@ -12,6 +12,10 @@ let package = Package(
             name: "LongfellowZkp",
             targets: ["LongfellowZkp"]
         ),
+        .library(
+            name: "LongfellowAppIntents",
+            targets: ["LongfellowAppIntents"]
+        ),
     ],
     dependencies: [
         .package(url: "https://github.com/apple/swift-certificates.git", from: "1.0.0"),
@@ -32,6 +36,10 @@ let package = Package(
         .target(
             name: "LongfellowZkp",
             dependencies: [ .target(name: "MdocZkp"), .target(name: "MdocZK")]
+        ),
+        .target(
+            name: "LongfellowAppIntents",
+            dependencies: []
         ),
         .testTarget(
             name: "LongfellowZkpTests",
