@@ -12,13 +12,14 @@ public struct RunMdocProverIntent: AppIntent {
 
     @available(iOS 26.0, macOS 26.0, watchOS 26.0, *)
     public static var supportedModes: IntentModes {
-        .background
+		.foreground
     }
 
     public init() {}
 
     public func perform() async throws -> some IntentResult {
         // TODO: Trigger your prover flow here.
+		print("app intent running")
         return .result()
     }
 }
