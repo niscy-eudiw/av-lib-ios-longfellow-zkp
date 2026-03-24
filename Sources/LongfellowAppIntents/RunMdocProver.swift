@@ -1,7 +1,7 @@
 import AppIntents
 
 /// Runs the mdoc prover flow.
-public struct RunMdocProver: AppIntent {
+public struct RunMdocProverIntent: AppIntent {
     public static var title: LocalizedStringResource {
         "Run mdoc prover"
     }
