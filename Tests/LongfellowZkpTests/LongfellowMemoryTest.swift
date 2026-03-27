@@ -23,8 +23,21 @@ import XCTest
 
 class LongfellowMemoryTest: XCTestCase {
 
-    func testProofMemoryImpact() async throws {
+    func testMultipazCircuitProofMemoryImpact() async throws {
         let (zkSystem, spec) = try LongfellowZkpTests.loadCircuitAndSpec()
+        let zkSystemLf = zkSystem as! LongfellowZkSystem
+        let document = try Document(cbor: try CBOR.decode(MdocTestDataProvider.getMdocBytes())!)
+        // Generate proof
+        self.measure(metrics: [XCTMemoryMetric()]) {
+            do {
+                let zkDoc = try zkSystemLf.generateProof(zkSystemSpec: spec, document: document, sessionTranscriptBytes: MdocTestDataProvider.getTranscript(), timestamp: Date.now)
+                  XCTAssert(zkDoc.proof.count > 0)
+            } catch { XCTFail(error.localizedDescription)}
+        }
+    }
+    
+    func testGeneratedCircuitProofMemoryImpact() async throws {
+        let (zkSystem, spec) = try LongfellowZkpTests.generateCircuitAndSpec()
         let zkSystemLf = zkSystem as! LongfellowZkSystem
         let document = try Document(cbor: try CBOR.decode(MdocTestDataProvider.getMdocBytes())!)
         // Generate proof

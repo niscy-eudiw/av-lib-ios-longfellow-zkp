@@ -31,17 +31,68 @@ public class LongfellowNatives {
     /// Returns a ``LongfellowZkSystemSpec`` for the given number of attributes.
     /// - Parameter numAttributes: The number of attributes the circuit should support.
     /// - Returns: A ``LongfellowZkSystemSpec`` instance.
-    /// - Note: Not yet implemented; calling this method will trigger a fatal error.
     public static func getLongfellowZkSystemSpec(numAttributes: Int) -> LongfellowZkSystemSpec {
-        fatalError("Not implemented")
+        return withUnsafePointer(to: kZkSpecs) { tuple in
+            tuple.withMemoryRebound(to: ZkSpecStruct.self, capacity: Int(kNumZkSpecs)) { specs in
+                for i in 0..<Int(kNumZkSpecs) {
+                    let spec = specs[i]
+                    if spec.num_attributes == numAttributes {
+                        var hash = spec.circuit_hash
+                        let circuitHash = withUnsafePointer(to: &hash) {
+                            $0.withMemoryRebound(to: CChar.self, capacity: 65) {
+                                String(cString: $0)
+                            }
+                        }
+                        return LongfellowZkSystemSpec(
+                            system: String(cString: spec.system),
+                            circuitHash: circuitHash,
+                            numAttributes: Int64(spec.num_attributes),
+                            version: Int64(spec.version),
+                            blockEncHash: Int64(spec.block_enc_hash),
+                            blockEncSig: Int64(spec.block_enc_sig)
+                        )
+                    }
+                }
+                fatalError("No ZK spec found for \(numAttributes) attributes")
+            }
+        }
     }
 
     /// Generates circuit bytes for the given ZK system specification.
     /// - Parameter jzkSpec: The Longfellow ZK system specification.
     /// - Returns: The generated circuit data.
-    /// - Note: Not yet implemented; calling this method will trigger a fatal error.
     public static func generateCircuit(jzkSpec: LongfellowZkSystemSpec) -> Data {
-        fatalError("Not implemented")
+        let systemName = "longfellow-libzk-v1"
+        var zkSpecStruct = ZkSpecStruct()
+        systemName.withCString { cString in
+            zkSpecStruct.system = UnsafePointer(cString)
+        }
+        withUnsafeMutablePointer(to: &zkSpecStruct) { zkSpecPtr in
+            let circuitHashPtr = UnsafeMutableRawPointer(mutating: zkSpecPtr).advanced(by: MemoryLayout.offset(of: \ZkSpecStruct.circuit_hash)!)
+            memset(circuitHashPtr, 0, 65)
+            if let circuitHashData = jzkSpec.circuitHash.data(using: .utf8) {
+                let len = min(circuitHashData.count, 64)
+                circuitHashData.withUnsafeBytes { bytes in
+                    if let baseAddress = bytes.baseAddress {
+                        memcpy(circuitHashPtr, baseAddress, len)
+                    }
+                }
+            }
+        }
+        zkSpecStruct.num_attributes = jzkSpec.numAttributes
+        zkSpecStruct.version = jzkSpec.version
+        zkSpecStruct.block_enc_hash = jzkSpec.blockEncHash
+        zkSpecStruct.block_enc_sig = jzkSpec.blockEncSig
+        var circuitPtr: UnsafeMutablePointer<UInt8>?
+        var circuitLen: UInt = 0
+        let rc = withUnsafeMutablePointer(to: &zkSpecStruct) { zkSpecPtr in
+            generate_circuit(zkSpecPtr, &circuitPtr, &circuitLen)
+        }
+        guard rc == CIRCUIT_GENERATION_SUCCESS, let buffer = circuitPtr else {
+            fatalError("Circuit generation failed with error code: \(rc.rawValue)")
+        }
+        let data = Data(bytes: buffer, count: Int(circuitLen))
+        return data
     }
 
     /// Runs the native mdoc ZK prover to generate a proof.

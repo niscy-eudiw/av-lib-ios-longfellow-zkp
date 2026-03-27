@@ -37,6 +37,44 @@ struct LongfellowZkpTests {
         let zkSystem = try #require(zkRepository.lookup(system.name))
         return (zkSystem, spec)
     }
+    
+    static func generateCircuitAndSpec() throws -> (any ZkSystemProtocol, ZkSystemSpec) {
+        let specLf = LongfellowNatives.getLongfellowZkSystemSpec(numAttributes: 1)
+        let circuitData = LongfellowNatives.generateCircuit(jzkSpec: specLf)
+        let filename = "\(specLf.version)_\(specLf.numAttributes)_\(specLf.blockEncHash)_\(specLf.blockEncSig)_\(specLf.circuitHash)"
+        let circuit = try CircuitEntry(circuitFilename: filename, circuitData: circuitData)
+        let system = LongfellowZkSystem(circuits: [circuit])
+        // Initialize ZK system repository
+        let zkRepository = ZkSystemRepository(systems: [system])
+        // Create ZK system spec
+        let longfellowSpec = LongfellowZkSystemSpec(
+            system: system.name, circuitHash: specLf.circuitHash, numAttributes: 1, version: Int64(specLf.version), blockEncHash: Int64(specLf.blockEncHash), blockEncSig: Int64(specLf.blockEncSig))
+        let spec = ZkSystemSpec(id: "\(system.name)_\(specLf.circuitHash)", system: system.name, params: longfellowSpec.toZkParams()) // id: "one_\(system.name)",
+        let zkSystem = try #require(zkRepository.lookup(system.name))
+        return (zkSystem, spec)
+    }
+    
+    
+    static func generateProof(_ zkSystem: any ZkSystemProtocol, _ spec: ZkSystemSpec) throws -> ZkDocument {
+        // Decode session transcript and document
+        // let sessionTranscript = try #require(try CBOR.decode(MdocTestDataProvider.getTranscript()))
+        let documentData = try #require(try CBOR.decode(MdocTestDataProvider.getMdocBytes()))
+        let document = try Document(cbor: documentData)
+        let issuerCert = document.issuerSigned.issuerAuth.x5chain.first!
+        let publicKeyInfo = try ECKeyExtractor.extractECCKeyInfo(from: Data(issuerCert))
+        let publicKeyRawData = publicKeyInfo.x963KeyData.dropFirst()
+        let x = LongfellowZkSystem.getFormattedCoordinate(value: publicKeyRawData.prefix(publicKeyRawData.count / 2))
+        let y = LongfellowZkSystem.getFormattedCoordinate(value: publicKeyRawData.suffix(publicKeyRawData.count / 2))
+        let testTime = MdocTestDataProvider.getProofGenerationDate(year: 2025, month: 7, day: 3)
+        // Generate proof
+        let longfellowDocBytes = CBOR.encode(CBOR.map([
+            CBOR.utf8String("version"): CBOR.utf8String("1.0"),
+            CBOR.utf8String("documents"): CBOR.array([document.toCBOR(options: CBOROptions())]),
+            CBOR.utf8String("status"): CBOR.unsignedInt(0)
+        ]), options: CBOROptions())
+        let zkDoc = try zkSystem.generateProof(zkSystemSpec: spec, docBytes: longfellowDocBytes,                                   x: x, y: y, sessionTranscriptBytes: MdocTestDataProvider.getTranscript(), timestamp: testTime)
+       return zkDoc
+    }
 
     @Test func testZkSystemSpecFromDcql() async throws {
         let jsonString = """
@@ -71,30 +109,19 @@ struct LongfellowZkpTests {
         #expect(x == "0x6789e96e797e2e04f7f3cbb54a12410412410db000fb6d63dc977d8b5d35a4f9", "x error")
         #expect(y == "0x3b71f297d9d308ba2e955e8563afa0604833aae10ecb1aaefbe4159b5b8b9057", "y error")
     }
-    
+
     @Test func testMultipazMdlDocProofFullFlow() async throws {
         let (zkSystem, spec) = try Self.loadCircuitAndSpec()
-        // Decode session transcript and document
-        // let sessionTranscript = try #require(try CBOR.decode(MdocTestDataProvider.getTranscript()))
-        let documentData = try #require(try CBOR.decode(MdocTestDataProvider.getMdocBytes()))
-        let document = try Document(cbor: documentData)
-        let issuerCert = document.issuerSigned.issuerAuth.x5chain.first!
-        let publicKeyInfo = try ECKeyExtractor.extractECCKeyInfo(from: Data(issuerCert))
-        let publicKeyRawData = publicKeyInfo.x963KeyData.dropFirst()
-        let x = LongfellowZkSystem.getFormattedCoordinate(value: publicKeyRawData.prefix(publicKeyRawData.count / 2))
-        let y = LongfellowZkSystem.getFormattedCoordinate(value: publicKeyRawData.suffix(publicKeyRawData.count / 2))
-        let testTime = MdocTestDataProvider.getProofGenerationDate(year: 2025, month: 7, day: 3)
-        // Generate proof
-        let longfellowDocBytes = CBOR.encode(CBOR.map([
-            CBOR.utf8String("version"): CBOR.utf8String("1.0"),
-            CBOR.utf8String("documents"): CBOR.array([document.toCBOR(options: CBOROptions())]),
-            CBOR.utf8String("status"): CBOR.unsignedInt(0)
-        ]), options: CBOROptions())
-        let zkDoc = try zkSystem.generateProof(zkSystemSpec: spec, docBytes: longfellowDocBytes,
-            x: x, y: y, sessionTranscriptBytes: MdocTestDataProvider.getTranscript(), timestamp: testTime)
+        let zkDoc = try Self.generateProof(zkSystem, spec)
         #expect(zkDoc.proof.count > 0)
         // verify fails currently but we are interested only for the proof
         //try zkSystem.verifyProof(zkDocument: zkDoc, zkSystemSpec: spec, sessionTranscriptBytes: MdocTestDataProvider.getTranscript())
+    }
+    
+    @Test func testLongfellowMdlDocProofFullFlow() async throws {
+        let (zkSystem, spec) = try Self.generateCircuitAndSpec()
+        let zkDoc = try Self.generateProof(zkSystem, spec)
+        #expect(zkDoc.proof.count > 0)
     }
 
     @Test() func testDocumentEncode() async throws {
@@ -104,6 +131,29 @@ struct LongfellowZkpTests {
         print(Data(docB2).base64EncodedString())
         #expect(docB.count == docB2.count, "Count not equal")
         #expect(docB == docB2, "Data not equal")
+    }
+
+    @Test func testGetLongfellowZkSystemSpecReturnsValidSpec() async throws {
+        let spec = LongfellowNatives.getLongfellowZkSystemSpec(numAttributes: 1)
+        #expect(spec.system == "longfellow-libzk-v1")
+        #expect(spec.numAttributes == 1)
+        #expect(spec.circuitHash.isEmpty == false)
+        #expect(spec.version > 0)
+        #expect(spec.blockEncHash > 0)
+        #expect(spec.blockEncSig > 0)
+    }
+
+    @Test func testGetLongfellowZkSystemSpecCircuitFilename() async throws {
+        let spec = LongfellowNatives.getLongfellowZkSystemSpec(numAttributes: 1)
+        // The known circuit filename encodes: version_numAttributes_blockEncHash_blockEncSig_circuitHash
+        let filename = "\(spec.version)_\(spec.numAttributes)_\(spec.blockEncHash)_\(spec.blockEncSig)_\(spec.circuitHash)"
+        print(filename)
+    }
+
+    @Test func testGenerateCircuitProducesNonEmptyData() async throws {
+        let spec = LongfellowNatives.getLongfellowZkSystemSpec(numAttributes: 1)
+        let circuitData = LongfellowNatives.generateCircuit(jzkSpec: spec)
+        #expect(circuitData.count > 0)
     }
 
     @Test func testIssuerAuthEncodeDecode() async throws {
