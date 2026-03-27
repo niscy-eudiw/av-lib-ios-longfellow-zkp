@@ -130,6 +130,10 @@ public class LongfellowNatives {
         // Prepare output pointers
         var proofPtr: UnsafeMutablePointer<UInt8>?
         var proofLen: UInt = 0
+        // Allocate arena buffer (100 MB)
+        let arenaSize = 100 * 1024 * 1024
+        let arenaBuf = UnsafeMutablePointer<UInt8>.allocate(capacity: arenaSize)
+        defer { arenaBuf.deallocate() }
         // Call the C function
         let rc = circuit.withUnsafeBytes { (circuitBytes: UnsafeRawBufferPointer) -> MdocProverErrorCode in
             guard let circuitBase = circuitBytes.baseAddress?.assumingMemoryBound(to: UInt8.self) else {
@@ -161,7 +165,9 @@ public class LongfellowNatives {
                                         nowCString,
                                         &proofPtr,
                                         &proofLen,
-                                        zkSpecPtr
+                                        zkSpecPtr,
+                                        arenaBuf,
+                                        arenaSize
                                     )
                                 }
                             }
