@@ -60,9 +60,8 @@ public class LongfellowNatives {
     ///   - statements: The attributes to include in the proof.
     /// - Returns: The generated proof data.
     /// - Throws: ``ProofGenerationError`` if the native prover fails or returns an empty proof.
-    public static func runMdocProver(circuit: Data, circuitSize: Int, mdoc: Data, mdocSize: Int, pkx: String, pky: String, transcript: Data, transcriptSize: Int, now: String, zkSpec: LongfellowZkSystemSpec, statements: [NativeAttribute]) throws -> Data {
-        print(
-            "// AV document\n// random: 32 bytes\n\nx:\n\(pkx)\n\ny:\n\(pky)\n\n\nsessionTranscript: (\(transcriptSize))\n\(transcript.toHexString())\n\n\nmdoc: (\(mdocSize))\n\(mdoc.toHexString())\n")
+    public static func runMdocProver(circuit: Data, circuitSize: Int, mdoc: Data, mdocSize: Int, pkx: String, pky: String, transcript: Data, transcriptSize: Int, now: String, zkSpec: LongfellowZkSystemSpec, statements: [NativeAttribute], arenaBuf: UnsafeMutablePointer<UInt8>? = nil, arenaBufSize: Int = 0) throws -> Data {
+        //print("// AV document\n// random: 32 bytes\n\nx:\n\(pkx)\n\ny:\n\(pky)\n\n\nsessionTranscript: (\(transcriptSize))\n\(transcript.toHexString())\n\n\nmdoc: (\(mdocSize))\n\(mdoc.toHexString())\n")
         // Allocate array for RequestedAttribute
         let requestedAttributes = UnsafeMutablePointer<RequestedAttribute>.allocate(capacity: statements.count)
         defer {  requestedAttributes.deallocate() }
@@ -162,7 +161,9 @@ public class LongfellowNatives {
                                         nowCString,
                                         &proofPtr,
                                         &proofLen,
-                                        zkSpecPtr
+                                        zkSpecPtr,
+                                        arenaBuf,
+                                        arenaBufSize
                                     )
                                 }
                             }

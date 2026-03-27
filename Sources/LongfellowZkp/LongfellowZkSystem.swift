@@ -30,8 +30,9 @@ import os.log
 /// `<version>_<numAttributes>_<blockEncHash>_<blockEncSig>_<circuitHash>`.
 public struct LongfellowZkSystem: ZkSystemProtocol {
     private let circuits: [CircuitEntry]
+    private let mmapFileManager: MMapFileManager?
     static let longFellowSystemName = "longfellow-libzk-v1"
- 
+
     private static let TAG = "LongfellowZkSystem"
 
     /// Enumerates filenames and file URLs in the longfellow-libzk-v1 folder in the app bundle.
@@ -61,9 +62,12 @@ public struct LongfellowZkSystem: ZkSystemProtocol {
     public var name: String { Self.longFellowSystemName }
 
     /// Creates a new `LongfellowZkSystem` with the given circuit entries.
-    /// - Parameter circuits: The circuit entries to register. Defaults to an empty array.
-    public init(circuits: [CircuitEntry] = []) {
+    /// - Parameters:
+    ///   - circuits: The circuit entries to register. Defaults to an empty array.
+    ///   - mmapFileManager: Optional memory-mapped file manager providing an arena buffer for the native prover.
+    public init(circuits: [CircuitEntry] = [], mmapFileManager: MMapFileManager? = nil) {
         self.circuits = circuits
+        self.mmapFileManager = mmapFileManager
     }
 
     // MARK: - Private Helper Methods
@@ -205,6 +209,8 @@ public struct LongfellowZkSystem: ZkSystemProtocol {
         // According to Longfellow-ZK spec, can't have any fractional seconds.
         let adjustedTimestamp = timestamp.truncateToWholeSeconds()
         let (xi, yi) = if x == nil || y == nil { try Self.getPublicKeyFromIssuerCert(document: document)} else { ("", "")}
+        let arenaBuf = mmapFileManager?.mappedPointer?.assumingMemoryBound(to: UInt8.self)
+        let arenaBufSize = mmapFileManager != nil ? MMapFileManager.fileSize : 0
         let proof = try LongfellowNatives.runMdocProver(
             circuit: circuitBytes,
             circuitSize: circuitBytes.count,
@@ -216,7 +222,9 @@ public struct LongfellowZkSystem: ZkSystemProtocol {
             transcriptSize: sessionTranscriptBytes.count,
             now: formatDate(timestamp: adjustedTimestamp),
             zkSpec: longfellowZkSystemSpec,
-            statements: attributes
+            statements: attributes,
+            arenaBuf: arenaBuf,
+            arenaBufSize: arenaBufSize
         )
         let zkDocument = ZkDocument(
             documentData: ZkDocumentData(
